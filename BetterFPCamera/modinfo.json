@@ -1,0 +1,14 @@
+{
+    "type": "code",
+    "modid": "betterfpcamera",
+    "name": "BetterFPCamera",
+    "authors": [
+        "Pseudonym_Tim"
+    ],
+    "description": "Enhances first person immersion by introducing a more dynamic and interesting camera!",
+    "version": "1.2.0",
+    "side": "client",
+    "dependencies": {
+        "game": ""
+    }
+}
