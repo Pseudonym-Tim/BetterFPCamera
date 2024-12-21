@@ -3,6 +3,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
+using Vintagestory.GameContent;
 
 namespace BetterFPCamera
 {
@@ -48,7 +49,7 @@ namespace BetterFPCamera
         [HarmonyPatch(typeof(Block), "OnBlockBroken")]
         public static void OnBlockBroken(Block __instance, IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1f)
         {
-            if(ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
+            if(ClientAPI?.Render?.CameraType == EnumCameraMode.FirstPerson)
             {
                 if(byPlayer != null && BlockBreakScreenshake && world.Side == EnumAppSide.Client)
                 {
@@ -62,7 +63,7 @@ namespace BetterFPCamera
         [HarmonyPatch(typeof(BlockBehavior), "DoPlaceBlock")]
         public static void DoPlaceBlock(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel, ItemStack byItemStack, ref EnumHandling handling)
         {
-            if(ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
+            if(ClientAPI?.Render?.CameraType == EnumCameraMode.FirstPerson)
             {
                 if(byPlayer != null && ClientAPI.World.Side == EnumAppSide.Client)
                 {
@@ -79,7 +80,7 @@ namespace BetterFPCamera
         [HarmonyPatch(typeof(ClientPlayerInventoryManager), "DropItem")]
         public static void DropItem(ItemSlot slot, bool fullStack, bool __result)
         {
-            if(ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
+            if(ClientAPI?.Render?.CameraType == EnumCameraMode.FirstPerson)
             {
                 if(ClientAPI.World.Side == EnumAppSide.Client && __result && DropItemScreenshake)
                 {

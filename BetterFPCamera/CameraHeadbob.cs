@@ -45,7 +45,6 @@ namespace BetterFPCamera
         public static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
         {
             // Get the player entity from the intersection tester...
-            IClientWorldAccessor clientWorld = (intersectionTester.blockSelectionTester as IClientWorldAccessor);
             EntityPlayer playerEntity = ClientAPI.World?.Player?.Entity;
 
             if(ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
