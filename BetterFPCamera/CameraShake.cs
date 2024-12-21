@@ -18,8 +18,12 @@ namespace BetterFPCamera
         public static bool BlockBreakScreenshake => InitializeMod.ModConfig.BlockBreakScreenshake;
         public static bool BlockPlaceScreenshake => InitializeMod.ModConfig.BlockPlaceScreenshake;
         public static bool DropItemScreenshake => InitializeMod.ModConfig.DropItemScreenshake;
+        public static bool ShootBowScreenshake => InitializeMod.ModConfig.ShootBowScreenshake;
+        public static bool ThrowSpearScreenshake => InitializeMod.ModConfig.ThrowSpearScreenshake;
         public static float DropItemScreenshakeStrength => InitializeMod.ModConfig.DropItemScreenshakeStrength;
         public static float BlockBreakScreenshakeStrength => InitializeMod.ModConfig.BlockBreakScreenshakeStrength;
+        public static float ThrowSpearScreenshakeStrength => InitializeMod.ModConfig.ThrowSpearScreenshakeStrength;
+        public static float ShootBowScreenshakeStrength => InitializeMod.ModConfig.ShootBowScreenshakeStrength;
         public static float BlockPlaceScreenshakeStrength => InitializeMod.ModConfig.BlockPlaceScreenshakeStrength;
 
         public void Init(ICoreClientAPI api)
@@ -55,6 +59,37 @@ namespace BetterFPCamera
                 {
                     ClientAPI.World.SetCameraShake(BlockBreakScreenshakeStrength);
                     Debug.Log("Block broken!");
+                }
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(ItemSpear), "OnHeldInteractStop")]
+        public static void OnHeldInteractStopItemSpear(ItemSpear __instance, float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
+        {
+            if(ClientAPI?.Render?.CameraType == EnumCameraMode.FirstPerson)
+            {
+                EntityPlayer playerEntity = ClientAPI?.World?.Player.Entity;
+
+                if(playerEntity != null && ThrowSpearScreenshake && ClientAPI.World.Side == EnumAppSide.Client)
+                {
+                    ClientAPI.World.SetCameraShake(ThrowSpearScreenshakeStrength);
+                }
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(ItemBow), "OnHeldInteractStop")]
+        public static void OnHeldInteractStopItemBow(ItemBow __instance, float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
+        {
+            if(ClientAPI?.Render?.CameraType == EnumCameraMode.FirstPerson)
+            {
+                EntityPlayer playerEntity = ClientAPI?.World?.Player.Entity;
+
+                if(playerEntity != null && ShootBowScreenshake && ClientAPI.World.Side == EnumAppSide.Client)
+                {
+                    ClientAPI.World.SetCameraShake(ShootBowScreenshakeStrength);
+                    Debug.Log("Launched arrow!");
                 }
             }
         }

@@ -7,13 +7,17 @@
         public bool AllowMidairTilt { get; set; } = false;
         public bool BlockBreakScreenshake { get; set; } = true;
         public bool BlockPlaceScreenshake { get; set; } = true;
+        public bool ThrowSpearScreenshake { get; set; } = true;
+        public bool ShootBowScreenshake { get; set; } = true;
         public bool DropItemScreenshake { get; set; } = true;
         public bool DamageTilt { get; set; } = true;
         public float DamageShakeMultiplier { get; set; } = 5f;
         public float TiltStrength { get; set; } = 0.025f;
         public float TiltSpeedMultiplier { get; set; } = 0.75f;
         public float BlockBreakScreenshakeStrength { get; set; } = 0.15f;
-        public float BlockPlaceScreenshakeStrength { get; set; } = 0.1f;
+        public float ThrowSpearScreenshakeStrength { get; set; } = 0.20f;
+        public float ShootBowScreenshakeStrength { get; set; } = 0.20f;
+        public float BlockPlaceScreenshakeStrength { get; set; } = 0.10f;
         public float DropItemScreenshakeStrength { get; set; } = 0.15f;
         public bool InvertTiltDirection { get; set; } = false;
 
@@ -25,12 +29,16 @@
             AllowMidairTilt = false;
             BlockBreakScreenshake = true;
             BlockPlaceScreenshake = true;
+            ShootBowScreenshake = true;
+            ThrowSpearScreenshake = true;
             DropItemScreenshake = true;
             DamageTilt = true;
             DamageShakeMultiplier = 5f;
             TiltStrength = 0.025f;
             TiltSpeedMultiplier = 0.75f;
             BlockBreakScreenshakeStrength = 0.15f;
+            ThrowSpearScreenshakeStrength = 0.20f;
+            ShootBowScreenshakeStrength = 0.20f;
             BlockPlaceScreenshakeStrength = 0.1f;
             DropItemScreenshakeStrength = 0.25f;
             InvertTiltDirection = false;
