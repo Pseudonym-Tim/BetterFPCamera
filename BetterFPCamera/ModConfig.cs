@@ -1,62 +1,63 @@
-﻿namespace BetterFPCamera
+﻿using System.Reflection;
+
+namespace BetterFPCamera
 {
-    public class ModConfig
+    public sealed class ModConfig
     {
         public bool HorizontalHeadbob { get; set; } = true;
         public bool HideHandsOnDeath { get; set; } = true;
         public bool AllowMidairTilt { get; set; } = false;
+
         public bool BlockBreakScreenshake { get; set; } = true;
         public bool BlockPlaceScreenshake { get; set; } = true;
         public bool ThrowSpearScreenshake { get; set; } = true;
         public bool ShootBowScreenshake { get; set; } = true;
         public bool DropItemScreenshake { get; set; } = true;
+        public bool ThrowStoneScreenshake { get; set; } = true;
+        public bool ThrowSnowballScreenshake { get; set; } = true;
+        public bool ThrowBeenadeScreenshake { get; set; } = true;
+
         public bool DamageTilt { get; set; } = true;
+
         public float DamageShakeMultiplier { get; set; } = 5f;
+        public float MaxDamageShake { get; set; } = 1f;
         public float TiltStrength { get; set; } = 0.025f;
         public float TiltSpeedMultiplier { get; set; } = 0.75f;
+
         public float BlockBreakScreenshakeStrength { get; set; } = 0.15f;
         public float ThrowSpearScreenshakeStrength { get; set; } = 0.20f;
         public float ShootBowScreenshakeStrength { get; set; } = 0.20f;
+        public float ThrowStoneScreenshakeStrength { get; set; } = 0.12f;
+        public float ThrowSnowballScreenshakeStrength { get; set; } = 0.10f;
+        public float ThrowBeenadeScreenshakeStrength { get; set; } = 0.22f;
         public float BlockPlaceScreenshakeStrength { get; set; } = 0.10f;
-        public float DropItemScreenshakeStrength { get; set; } = 0.15f;
-        public bool InvertTiltDirection { get; set; } = false;
+        public float DropItemScreenshakeStrength { get; set; } = 0.25f;
 
-        public ModConfig()
-        {
-            // Initialize default settings...
-            HorizontalHeadbob = true;
-            HideHandsOnDeath = true;
-            AllowMidairTilt = false;
-            BlockBreakScreenshake = true;
-            BlockPlaceScreenshake = true;
-            ShootBowScreenshake = true;
-            ThrowSpearScreenshake = true;
-            DropItemScreenshake = true;
-            DamageTilt = true;
-            DamageShakeMultiplier = 5f;
-            TiltStrength = 0.025f;
-            TiltSpeedMultiplier = 0.75f;
-            BlockBreakScreenshakeStrength = 0.15f;
-            ThrowSpearScreenshakeStrength = 0.20f;
-            ShootBowScreenshakeStrength = 0.20f;
-            BlockPlaceScreenshakeStrength = 0.1f;
-            DropItemScreenshakeStrength = 0.25f;
-            InvertTiltDirection = false;
-        }
+        public bool InvertTiltDirection { get; set; } = false;
 
         public void FixMissingOrInvalidProperties(ModConfig defaultConfig)
         {
-            System.Reflection.PropertyInfo[] properties = typeof(ModConfig).GetProperties();
+            PropertyInfo[] properties = typeof(ModConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
-            foreach(System.Reflection.PropertyInfo prop in properties)
+            foreach(PropertyInfo propertyInfo in properties)
             {
-                object currentValue = prop.GetValue(this);
-                object defaultValue = prop.GetValue(defaultConfig);
+                object? currentValue = propertyInfo.GetValue(this);
+                object? defaultValue = propertyInfo.GetValue(defaultConfig);
 
-                // If current value is null or the same as default, replace it with the default value...
-                if(currentValue == null || currentValue.Equals(defaultValue))
+                if(currentValue == null)
                 {
-                    prop.SetValue(this, defaultValue);
+                    propertyInfo.SetValue(this, defaultValue);
+                    continue;
+                }
+
+                if(propertyInfo.PropertyType == typeof(float))
+                {
+                    float floatValue = (float)currentValue;
+
+                    if(float.IsNaN(floatValue) || float.IsInfinity(floatValue))
+                    {
+                        propertyInfo.SetValue(this, defaultValue);
+                    }
                 }
             }
         }

@@ -7,12 +7,11 @@ using Vintagestory.Client.NoObf;
 namespace BetterFPCamera
 {
     [HarmonyPatchCategory("betterfpcamera_camerafix")]
-    class CameraFix
+    internal sealed class CameraFix
     {
-        public static ICoreClientAPI ClientAPI { get; set; } = null;
-        public Harmony harmonyPatcher;
+        public static ICoreClientAPI ClientAPI { get; private set; } = null!;
 
-        public static bool HideHandsOnDeath => InitializeMod.ModConfig.HideHandsOnDeath;
+        private Harmony? harmonyPatcher;
 
         public void Init(ICoreClientAPI api)
         {
@@ -31,31 +30,46 @@ namespace BetterFPCamera
 
         public void Unpatch()
         {
-            if(Harmony.HasAnyPatches("betterfpcamera_camerafix"))
+            if(harmonyPatcher != null && Harmony.HasAnyPatches(harmonyPatcher.Id))
             {
-                harmonyPatcher.UnpatchAll();
+                harmonyPatcher.UnpatchAll(harmonyPatcher.Id);
+                harmonyPatcher = null;
             }
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(Camera), "Update")]
-        public static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
+        private static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
         {
-            EntityPlayer playerEntity = ClientAPI.World?.Player?.Entity;
+            EntityPlayer? playerEntity = ClientAPI.World?.Player?.Entity;
 
             if(playerEntity != null && ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
             {
                 if(!playerEntity.Alive)
                 {
-                    // Fix player rotating their body and camera yaw while they're dead/dying...
                     __instance.Yaw = playerEntity.BodyYaw;
                     playerEntity.Pos.Yaw = playerEntity.BodyYaw;
-                    if(HideHandsOnDeath) { ClientAPI.Settings.Bool["hideFpHands"] = true; } // HACK!!!
+
+                    if(HideHandsOnDeath)
+                    {
+                        ClientAPI.Settings.Bool["hideFpHands"] = true;
+                    }
                 }
                 else
                 {
-                    if(HideHandsOnDeath) { ClientAPI.Settings.Bool["hideFpHands"] = false; } // HACK!!!
+                    if(HideHandsOnDeath)
+                    {
+                        ClientAPI.Settings.Bool["hideFpHands"] = false;
+                    }
                 }
+            }
+        }
+
+        private static bool HideHandsOnDeath
+        {
+            get
+            {
+                return InitializeMod.ModConfig.HideHandsOnDeath;
             }
         }
     }

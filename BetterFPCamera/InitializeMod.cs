@@ -4,22 +4,25 @@ using Vintagestory.API.Common;
 
 namespace BetterFPCamera
 {
-    public class InitializeMod : ModSystem
+    public sealed class InitializeMod : ModSystem
     {
-        public static ICoreClientAPI ClientAPI { get; set; } = null;
-        public static ModInfo ModInfo { get; set; } = null;
+        public static ICoreClientAPI ClientAPI { get; private set; } = null!;
+        public static ModInfo ModInfo { get; private set; } = null!;
 
-        readonly CameraTilt cameraTilt = new();
-        readonly CameraHeadbob cameraHeadbob = new();
-        readonly CameraShake cameraShake = new();
-        readonly CameraFix cameraFix = new();
+        private readonly CameraTilt cameraTilt = new CameraTilt();
+        private readonly CameraHeadbob cameraHeadbob = new CameraHeadbob();
+        private readonly CameraShake cameraShake = new CameraShake();
+        private readonly CameraFix cameraFix = new CameraFix();
 
         public override void Start(ICoreAPI apiClient)
         {
             base.Start(apiClient);
+
             ModInfo = Mod.Info;
+
             Debug.LoadLogger(apiClient.Logger);
             Debug.Log($"Running on version: {Mod.Info.Version}");
+
             cameraTilt.Patch();
             cameraHeadbob.Patch();
             cameraShake.Patch();
@@ -29,6 +32,7 @@ namespace BetterFPCamera
         public override void Dispose()
         {
             base.Dispose();
+
             cameraTilt.Unpatch();
             cameraHeadbob.Unpatch();
             cameraShake.Unpatch();
@@ -38,6 +42,7 @@ namespace BetterFPCamera
         public override void StartClientSide(ICoreClientAPI apiClient)
         {
             base.StartClientSide(apiClient);
+
             ClientAPI = apiClient;
 
             CheckCreateConfig();
@@ -48,10 +53,21 @@ namespace BetterFPCamera
             cameraFix.Init(apiClient);
         }
 
+        private static void SetObjectCache<T>(ICoreClientAPI apiClient, string key, T value) where T : class
+        {
+            if(apiClient.ObjectCache.ContainsKey(key))
+            {
+                apiClient.ObjectCache[key] = value;
+                return;
+            }
+
+            apiClient.ObjectCache.Add(key, value);
+        }
+
         public void CheckCreateConfig()
         {
-            ModConfig modConfiguration = null;
-            ModConfig defaultConfig = new ModConfig(); // Create an instance of default config...
+            ModConfig? modConfiguration = null;
+            ModConfig defaultConfig = new ModConfig();
 
             try
             {
@@ -59,11 +75,10 @@ namespace BetterFPCamera
             }
             catch(Exception exception)
             {
-                Debug.Log("Failed to load mod configuration...");
+                Debug.Log($"Failed to load mod configuration: {exception.GetType().Name}: {exception.Message}");
                 modConfiguration = null;
             }
 
-            // If the config is null, create a new one
             if(modConfiguration == null)
             {
                 Debug.Log("Generating new mod config!");
@@ -71,43 +86,51 @@ namespace BetterFPCamera
             }
             else
             {
-                // Fix missing or invalid properties in the loaded config...
                 modConfiguration.FixMissingOrInvalidProperties(defaultConfig);
             }
 
-            // Save the (potentially updated) config back to the file...
             ClientAPI.StoreModConfig(modConfiguration, "betterfpcam_config.json");
 
-            ModConfig = modConfiguration;
+            SetObjectCache(ClientAPI, "betterfpcam_config.json", modConfiguration);
         }
 
-        // Load client-side only...
-        public override bool ShouldLoad(EnumAppSide appSide) => appSide == EnumAppSide.Client;
-    
+        public override bool ShouldLoad(EnumAppSide appSide)
+        {
+            return appSide == EnumAppSide.Client;
+        }
+
         public static ModConfig ModConfig
         {
-            get { return (ModConfig)ClientAPI.ObjectCache["betterfpcam_config.json"]; }
-            set { ClientAPI.ObjectCache.Add("betterfpcam_config.json", value); }
+            get
+            {
+                return (ModConfig)ClientAPI.ObjectCache["betterfpcam_config.json"];
+            }
+            private set
+            {
+                SetObjectCache(ClientAPI, "betterfpcam_config.json", value);
+            }
         }
     }
 
-    public class Debug
+    public static class Debug
     {
         private static readonly OperatingSystem system = Environment.OSVersion;
-        static private ILogger loggerUtility;
+        private static ILogger? loggerUtility;
 
-        static public void LoadLogger(ILogger logger) => loggerUtility = logger;
+        public static void LoadLogger(ILogger logger)
+        {
+            loggerUtility = logger;
+        }
 
-        static public void Log(string message)
+        public static void Log(string message)
         {
             if((system.Platform == PlatformID.Unix || system.Platform == PlatformID.Other) && Environment.UserInteractive)
             {
                 Console.WriteLine($"{DateTime.Now:d.M.yyyy HH:mm:ss} [{InitializeMod.ModInfo.Name}] {message}");
+                return;
             }
-            else
-            {
-                loggerUtility?.Log(EnumLogType.Notification, $"[{InitializeMod.ModInfo.Name}] {message}");
-            }
+
+            loggerUtility?.Log(EnumLogType.Notification, $"[{InitializeMod.ModInfo.Name}] {message}");
         }
     }
 }

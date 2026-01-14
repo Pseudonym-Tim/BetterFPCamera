@@ -1,35 +1,28 @@
 ﻿using HarmonyLib;
 using System;
-using System.Linq;
-using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
-using Vintagestory.API.Server;
 using Vintagestory.Client.NoObf;
-using Vintagestory.GameContent;
 
 namespace BetterFPCamera
 {
     [HarmonyPatchCategory("betterfpcamera_cameratilt")]
-    class CameraTilt
+    internal sealed class CameraTilt
     {
-        public static ICoreClientAPI ClientAPI { get; set; } = null;
-        public static Camera Camera { get; set; } = null;
-        public Harmony harmonyPatcher;
+        public static ICoreClientAPI ClientAPI { get; private set; } = null!;
+        public static Camera? Camera { get; private set; } = null;
+
+        private Harmony? harmonyPatcher;
 
         private static float currentRoll = 0f;
         private static float currentPitch = 0f;
         private static float damageRoll = 0f;
         private static float damagePitch = 0f;
-        private static Random random = new Random();
-        private static int deathRollValue;
 
-        public static float TiltStrength => InitializeMod.ModConfig.TiltStrength;
-        public static float TiltSpeedMultiplier => InitializeMod.ModConfig.TiltSpeedMultiplier;
-        public static bool AllowMidairTilt => InitializeMod.ModConfig.AllowMidairTilt;
-        public static bool InvertTiltDirection => InitializeMod.ModConfig.InvertTiltDirection;
+        private static readonly Random random = new Random();
+        private static int deathRollValue = 0;
 
         public void Init(ICoreClientAPI api)
         {
@@ -48,15 +41,16 @@ namespace BetterFPCamera
 
         public void Unpatch()
         {
-            if(Harmony.HasAnyPatches("betterfpcamera_cameratilt"))
+            if(harmonyPatcher != null && Harmony.HasAnyPatches(harmonyPatcher.Id))
             {
-                harmonyPatcher.UnpatchAll();
+                harmonyPatcher.UnpatchAll(harmonyPatcher.Id);
+                harmonyPatcher = null;
             }
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(EntityPlayer), "Initialize")]
-        public static void Initialize(EntityPlayer __instance, EntityProperties properties, ICoreAPI api, long chunkindex3d)
+        private static void Initialize(EntityPlayer __instance, EntityProperties properties, ICoreAPI api, long chunkindex3d)
         {
             ResetCameraTilt();
             deathRollValue = random.Next(0, 2);
@@ -64,7 +58,7 @@ namespace BetterFPCamera
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(EntityPlayer), "Revive")]
-        public static void Revive()
+        private static void Revive()
         {
             ResetCameraTilt();
             deathRollValue = random.Next(0, 2);
@@ -72,9 +66,9 @@ namespace BetterFPCamera
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(Camera), "Update")]
-        public static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
+        private static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
         {
-            EntityPlayer playerEntity = ClientAPI.World?.Player?.Entity;
+            EntityPlayer? playerEntity = ClientAPI.World?.Player?.Entity;
 
             if(playerEntity != null && ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
             {
@@ -87,152 +81,122 @@ namespace BetterFPCamera
 
                 if(!playerEntity.Alive)
                 {
-                    // If the player's animation manager and animator are both available...
                     if(playerEntity.AnimManager != null && playerEntity.AnimManager.Animator != null)
                     {
-                        // Check if the "die" animation is either not active or has progressed beyond 80%...
                         if(!playerEntity.AnimManager.IsAnimationActive("die") || playerEntity.AnimManager.GetAnimationState("die").AnimProgress >= 0.8f)
                         {
-                            // Determine the death roll direction, adjust the roll and lerp time accordingly...
-                            targetRoll = deathRollValue == 0 ? -(TiltStrength * 3) : (TiltStrength * 3);
-                            lerpTime /= 3;
+                            targetRoll = deathRollValue == 0 ? -(TiltStrength * 3f) : (TiltStrength * 3f);
+                            lerpTime /= 3f;
                         }
                         else
                         {
-                            targetRoll = 0;
+                            targetRoll = 0f;
                         }
                     }
                     else
                     {
-                        targetRoll = 0;
+                        targetRoll = 0f;
                     }
 
-                    // Reset pitch and damage roll...
-                    targetPitch = 0;
-                    damageRoll = 0;
-                    damagePitch = 0;
+                    targetPitch = 0f;
+                    damageRoll = 0f;
+                    damagePitch = 0f;
                 }
 
-                // Smoothly interpolate the roll and pitch...
                 currentRoll = GameMath.Lerp(currentRoll, targetRoll, deltaTime * lerpTime);
                 currentPitch = GameMath.Lerp(currentPitch, targetPitch, deltaTime * lerpTime);
 
-                // Gradually reduce the damage-induced tilt over time...
                 damageRoll = GameMath.Lerp(damageRoll, 0f, deltaTime * lerpTime);
                 damagePitch = GameMath.Lerp(damagePitch, 0f, deltaTime * lerpTime);
 
-                // Rotate the camera around it's local space now based on the current roll and pitch!
                 RotateCameraLocal(__instance, currentRoll, currentPitch);
             }
 
-            // Update camera instance...
             Camera = __instance;
         }
 
         public static void ResetCameraTilt()
         {
-            if(Camera != null)
-            {
-                currentRoll = 0;
-                currentPitch = 0;
-                damageRoll = 0;
-                damagePitch = 0;
-            }
+            currentRoll = 0f;
+            currentPitch = 0f;
+            damageRoll = 0f;
+            damagePitch = 0f;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(EntityPlayer), "OnHurt")]
-        public static void OnHurt(EntityPlayer __instance, DamageSource damageSource, float damage)
+        private static void OnHurt(EntityPlayer __instance, DamageSource damageSource, float damage)
         {
-            // Ensure we have a valid damage source, the player is alive, and the camera isn't null...
-            if(damageSource == null || !__instance.Alive || Camera == null)
+            if(damageSource == null || !__instance.Alive || Camera == null || !DamageTilt)
             {
                 return;
             }
 
-            Vec3d damageSourcePosition = damageSource.HitPosition ?? damageSource.GetSourcePosition();
+            Vec3d? damageSourcePosition = damageSource.HitPosition ?? damageSource.GetSourcePosition();
 
-            if(damageSourcePosition != null && Camera != null)
+            if(damageSourcePosition == null)
             {
-                // Get the player's position and the damage source position...
-                Vec3d playerPosition = __instance.Pos.XYZ;
-
-                // Calculate the direction of the damage relative to the player
-                Vec3d damageDirection = damageSourcePosition.Sub(playerPosition).Normalize();
-
-                // Get the forward and up vectors...
-                Vec3d forward = Camera.forwardVec;
-                Vec3d up = new Vec3d(0, 1, 0);
-
-                // Calculate the right vector as the cross product of forward and up...
-                Vec3d right = forward.Cross(up).Normalize();
-
-                // Calculate tilt amount...
-                float tiltAmount = TiltStrength * 2;
-
-                // Calculate the tilt roll...
-                float tiltRoll = CalculateDamageTilt(damageDirection, right, tiltAmount);
-                float tiltPitch = CalculateDamagePitch(damageDirection, forward, tiltAmount);
-
-                // Add the damage-induced tilt to the current roll and pitch...
-                damageRoll += tiltRoll;
-                damagePitch += tiltPitch;
-
-                Debug.Log($"damageRoll: {damageRoll} damagePitch: {damagePitch}");
+                return;
             }
+
+            Vec3d playerPosition = __instance.Pos.XYZ;
+            Vec3d damageDirection = damageSourcePosition.Sub(playerPosition).Normalize();
+
+            Vec3d forward = Camera.forwardVec;
+            Vec3d up = new Vec3d(0d, 1d, 0d);
+            Vec3d right = forward.Cross(up).Normalize();
+
+            float tiltAmount = TiltStrength * 2f;
+
+            float tiltRoll = CalculateDamageTilt(damageDirection, right, tiltAmount);
+            float tiltPitch = CalculateDamagePitch(damageDirection, forward, tiltAmount);
+
+            damageRoll += tiltRoll;
+            damagePitch += tiltPitch;
         }
 
         private static void RotateCameraLocal(Camera __instance, double rollRotation, double pitchRotation)
         {
-            // Get the forward and up vectors...
             Vec3d forward = __instance.forwardVec;
-            Vec3d up = new Vec3d(0, 1, 0);
-
-            // Calculate the right vector as the cross product of forward and up...
+            Vec3d up = new Vec3d(0d, 1d, 0d);
             Vec3d right = forward.Cross(up).Normalize();
 
-            // Apply roll to the camera matrix by rotating around the forward vector...
             double[] rollAxis = forward.ToDoubleArray();
             Mat4d.Rotate(ClientAPI.Render.CameraMatrixOrigin, ClientAPI.Render.CameraMatrixOrigin, rollRotation, rollAxis);
 
-            // Apply pitch to the camera matrix by rotating around the right vector...
             double[] pitchAxis = right.ToDoubleArray();
             Mat4d.Rotate(ClientAPI.Render.CameraMatrixOrigin, ClientAPI.Render.CameraMatrixOrigin, pitchRotation, pitchAxis);
 
-            // Update the float array to reflect the modified matrix...
             for(int i = 0; i < 16; i++)
             {
                 ClientAPI.Render.CameraMatrixOriginf[i] = (float)ClientAPI.Render.CameraMatrixOrigin[i];
             }
         }
 
-        // (Fix the night skybox rotating along with the camera)...
         [HarmonyPrefix]
         [HarmonyPatch(typeof(ShaderProgramNightsky), "ViewMatrix", MethodType.Setter)]
-        public static void ViewMatrix(ShaderProgramNightsky __instance, ref float[] value)
+        private static void ViewMatrix(ShaderProgramNightsky __instance, ref float[] value)
         {
             float[] cameraMatrix = (float[])ClientAPI.Render.CameraMatrixOriginf.Clone();
 
             for(int i = 0; i < 16; i++)
             {
-                value[i] = (float)cameraMatrix[i];
+                value[i] = cameraMatrix[i];
             }
         }
 
-        // (Fix the daytime skybox rotating along with the camera)...
         [HarmonyPrefix]
         [HarmonyPatch(typeof(ShaderProgramSky), "ModelViewMatrix", MethodType.Setter)]
-        public static void ModelViewMatrix(ShaderProgramSky __instance, ref float[] value)
+        private static void ModelViewMatrix(ShaderProgramSky __instance, ref float[] value)
         {
             float[] cameraMatrix = (float[])ClientAPI.Render.CameraMatrixOriginf.Clone();
 
             for(int i = 0; i < 16; i++)
             {
-                value[i] = (float)cameraMatrix[i];
+                value[i] = cameraMatrix[i];
             }
         }
 
-        // Calculate damage roll tilt based on damage direction (relative to the player)...
         private static float CalculateDamageTilt(Vec3d damageDirection, Vec3d right, float tiltStrength)
         {
             double rightFactor = damageDirection.Dot(right);
@@ -240,26 +204,63 @@ namespace BetterFPCamera
             return rollTilt;
         }
 
-        // Calculate damage pitch tilt based on damage direction (relative to the player)...
         private static float CalculateDamagePitch(Vec3d damageDirection, Vec3d forward, float tiltStrength)
         {
             double forwardDot = forward.Dot(damageDirection);
-            float tiltPitch = forwardDot < -0.5 ? -tiltStrength : (forwardDot > 0.5 ? tiltStrength : 0);
+            float tiltPitch = forwardDot < -0.5d ? -tiltStrength : (forwardDot > 0.5d ? tiltStrength : 0f);
             return tiltPitch;
         }
 
-        // Calculate roll tilt based on movement direction (left or right strafing)...
-        static float GetRollTilt(EntityPlayer player)
+        private static float GetRollTilt(EntityPlayer player)
         {
-            float lateralMovement = player.Controls.Left ? -1 : player.Controls.Right ? 1 : 0;
+            float lateralMovement = player.Controls.Left ? -1f : (player.Controls.Right ? 1f : 0f);
             return lateralMovement * (InvertTiltDirection ? TiltStrength : -TiltStrength);
         }
 
-        // Calculate pitch tilt based on movement direction (forward or backward)...
-        static float GetPitchTilt(EntityPlayer player)
+        private static float GetPitchTilt(EntityPlayer player)
         {
-            float forwardMovement = player.Controls.Forward ? -1 : player.Controls.Backward ? 1 : 0;
+            float forwardMovement = player.Controls.Forward ? -1f : (player.Controls.Backward ? 1f : 0f);
             return forwardMovement * (InvertTiltDirection ? TiltStrength : -TiltStrength);
+        }
+    
+        private static float TiltStrength
+        {
+            get
+            {
+                return InitializeMod.ModConfig.TiltStrength;
+            }
+        }
+
+        private static float TiltSpeedMultiplier
+        {
+            get
+            {
+                return InitializeMod.ModConfig.TiltSpeedMultiplier;
+            }
+        }
+
+        private static bool AllowMidairTilt
+        {
+            get
+            {
+                return InitializeMod.ModConfig.AllowMidairTilt;
+            }
+        }
+
+        private static bool InvertTiltDirection
+        {
+            get
+            {
+                return InitializeMod.ModConfig.InvertTiltDirection;
+            }
+        }
+
+        private static bool DamageTilt
+        {
+            get
+            {
+                return InitializeMod.ModConfig.DamageTilt;
+            }
         }
     }
 }

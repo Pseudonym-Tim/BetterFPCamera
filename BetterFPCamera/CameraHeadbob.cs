@@ -1,5 +1,4 @@
 ﻿using HarmonyLib;
-using System;
 using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -9,13 +8,21 @@ using Vintagestory.Client.NoObf;
 namespace BetterFPCamera
 {
     [HarmonyPatchCategory("betterfpcamera_cameraheadbob")]
-    class CameraHeadbob
+    internal sealed class CameraHeadbob
     {
-        public static ICoreClientAPI ClientAPI { get; set; } = null;
-        public Harmony harmonyPatcher;
-        public static double previousHorizontalBob = 0.0f;
+        public static ICoreClientAPI ClientAPI { get; private set; } = null!;
 
-        public static bool HorizontalHeadbob => InitializeMod.ModConfig.HorizontalHeadbob;
+        private Harmony? harmonyPatcher;
+
+        private static double previousHorizontalBob = 0d;
+
+        private static bool HorizontalHeadbob
+        {
+            get
+            {
+                return InitializeMod.ModConfig.HorizontalHeadbob;
+            }
+        }
 
         public void Init(ICoreClientAPI api)
         {
@@ -34,64 +41,76 @@ namespace BetterFPCamera
 
         public void Unpatch()
         {
-            if(Harmony.HasAnyPatches("betterfpcamera_cameraheadbob"))
+            if(harmonyPatcher != null && Harmony.HasAnyPatches(harmonyPatcher.Id))
             {
-                harmonyPatcher.UnpatchAll();
+                harmonyPatcher.UnpatchAll(harmonyPatcher.Id);
+                harmonyPatcher = null;
             }
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(Camera), "Update")]
-        public static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
+        private static void Update(Camera __instance, float deltaTime, AABBIntersectionTest intersectionTester)
         {
-            // Get the player entity from the intersection tester...
-            EntityPlayer playerEntity = ClientAPI.World?.Player?.Entity;
+            EntityPlayer? playerEntity = ClientAPI.World?.Player?.Entity;
 
-            if(ClientAPI.Render.CameraType == EnumCameraMode.FirstPerson)
+            if(ClientAPI.Render.CameraType != EnumCameraMode.FirstPerson)
             {
-                if(playerEntity != null && ClientAPI.Settings.Bool["viewBobbing"] && HorizontalHeadbob)
-                {
-                    FieldInfo walkCounterField = AccessTools.Field(typeof(EntityPlayer), "walkCounter");
+                return;
+            }
 
-                    // Get the current value of walkCounter...
-                    double walkCounter = (double)walkCounterField.GetValue(playerEntity);
+            if(playerEntity == null)
+            {
+                return;
+            }
 
-                    // Get necessary values from the player controls...
-                    EntityControls entityControls = playerEntity.Controls;
+            if(!ClientAPI.Settings.Bool["viewBobbing"] || !HorizontalHeadbob)
+            {
+                return;
+            }
 
-                    bool isWalking = entityControls.TriesToMove && playerEntity.OnGround;
+            FieldInfo? walkCounterField = AccessTools.Field(playerEntity.GetType(), "walkCounter");
 
-                    const double bobSpeedMultiplier = 5.75; // Change this to adjust the speed of bobbing...
-                    const double bobAmplitudeMultiplier = 1.0; // Change this to adjust the amplitude independently...
+            if(walkCounterField == null)
+            {
+                walkCounterField = AccessTools.Field(playerEntity.GetType(), "walkCounterValue");
+            }
 
-                    // Set the base frequency and amplitude based on sneak/sprint status...
-                    double sneakMultiplier = entityControls.Sneak ? 5.0 : 1.8;
-                    double baseBobFrequency = (playerEntity.FeetInLiquid ? 0.8 : (1.0 + (entityControls.Sprint ? 0.07 : 0.0))) / (3.0 * sneakMultiplier);
+            if(walkCounterField == null)
+            {
+                return;
+            }
 
-                    // The frequency is affected by the speed multiplier...
-                    double bobFrequency = baseBobFrequency * bobSpeedMultiplier;
+            object? rawWalkCounter = walkCounterField.GetValue(playerEntity);
 
-                    // Set the base amplitude (before applying the amplitude multiplier)...
-                    double baseBobAmplitude = -0.2 / sneakMultiplier;
+            if(rawWalkCounter == null)
+            {
+                return;
+            }
 
-                    // Lerp between the current horizontal bob and the new calculated bob...
-                    double targetBob = baseBobAmplitude * bobAmplitudeMultiplier * GameMath.Sin(5.5 * walkCounter * bobFrequency);
+            double walkCounter = (double)rawWalkCounter;
 
-                    // Smooth the transition using Lerp, where 'previousBob' is the previous frame's bob value...
-                    double horizontalBob = GameMath.Lerp(previousHorizontalBob, targetBob, deltaTime * 5.0);
+            EntityControls entityControls = playerEntity.Controls;
 
-                    // Update previousBob for the next frame...
-                    previousHorizontalBob = horizontalBob;
+            const double bobSpeedMultiplier = 5.75d;
+            const double bobAmplitudeMultiplier = 1.0d;
 
-                    // Apply horizontal bob...
-                    ClientAPI.Render.CameraMatrixOrigin[12] = horizontalBob;
+            double sneakMultiplier = entityControls.Sneak ? 5.0d : 1.8d;
+            double baseBobFrequency = (playerEntity.FeetInLiquid ? 0.8d : (1.0d + (entityControls.Sprint ? 0.07d : 0.0d))) / (3.0d * sneakMultiplier);
+            double bobFrequency = baseBobFrequency * bobSpeedMultiplier;
 
-                    // Update the float array to reflect the modified matrix...
-                    for(int i = 0; i < 16; i++)
-                    {
-                        ClientAPI.Render.CameraMatrixOriginf[i] = (float)ClientAPI.Render.CameraMatrixOrigin[i];
-                    }
-                }
+            double baseBobAmplitude = -0.2d / sneakMultiplier;
+
+            double targetBob = baseBobAmplitude * bobAmplitudeMultiplier * GameMath.Sin(5.5d * walkCounter * bobFrequency);
+
+            double horizontalBob = GameMath.Lerp(previousHorizontalBob, targetBob, deltaTime * 5.0d);
+            previousHorizontalBob = horizontalBob;
+
+            ClientAPI.Render.CameraMatrixOrigin[12] = horizontalBob;
+
+            for(int i = 0; i < 16; i++)
+            {
+                ClientAPI.Render.CameraMatrixOriginf[i] = (float)ClientAPI.Render.CameraMatrixOrigin[i];
             }
         }
     }
